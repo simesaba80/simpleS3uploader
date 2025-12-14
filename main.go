@@ -12,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+var PresignClient *s3.PresignClient
+
 func main() {
 	InitS3Client() // S3クライアントを初期化
 	server := &http.Server{
@@ -72,7 +74,17 @@ func s3Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := fmt.Sprintf("http://s3.us-east-1.localhost.localstack.cloud:4566/%s/%s", bucketName, key)
+	// 署名付きURLを生成（有効期限: 15分）
+	presignedReq, err := PresignClient.PresignGetObject(context.Background(), &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(15*time.Minute))
+	if err != nil {
+		log.Printf("Failed to generate presigned URL: %v", err)
+		http.Error(w, "Failed to generate presigned URL", http.StatusInternalServerError)
+		return
+	}
+
 	fmt.Printf("Uploaded file: %s to bucket: %s\n", key, bucketName)
-	fmt.Fprintf(w, "Uploaded: %s", url)
+	fmt.Fprintf(w, "Uploaded: %s", presignedReq.URL)
 }

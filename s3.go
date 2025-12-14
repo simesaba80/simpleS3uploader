@@ -25,4 +25,5 @@ func InitS3Client() {
 	Client = s3.NewFromConfig(sdkConfig, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
+	PresignClient = s3.NewPresignClient(Client)
 }
