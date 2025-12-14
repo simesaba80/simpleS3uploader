@@ -1,0 +1,55 @@
+services:
+  app:
+    container_name: app
+    build:
+      context: .
+      dockerfile: ./air.dockerfile
+    tty: true
+    ports:
+      - 8080:8080
+    depends_on:
+      localstack-s3:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    dns:
+      - 10.0.2.20
+    networks:
+      - app-network
+    env_file:
+      - .env
+
+  localstack-s3:
+    container_name: localstack-s3
+    image: localstack/localstack:latest
+    env_file:
+      - .env
+    environment:
+      - SERVICES=s3
+      - REGION_NAME=us-east-1
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      app-network:
+        ipv4_address: 10.0.2.20
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./aws-init.sh:/etc/localstack/init/ready.d/aws-init.sh
+
+volumes:
+  dbdata:
+networks:
+  app-network:
+    name: app-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.2.0/24
