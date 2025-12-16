@@ -9,6 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+var Client *s3.Client
+var PresignClient *s3.PresignClient
+
 func InitS3Client() {
 	ctx := context.Background()
 	creds := credentials.NewStaticCredentialsProvider("test", "test", "")

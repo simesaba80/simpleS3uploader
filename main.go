@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
-
-var PresignClient *s3.PresignClient
 
 func main() {
 	InitS3Client() // S3クライアントを初期化
@@ -32,20 +29,11 @@ func main() {
 	}
 }
 
-var Client *s3.Client
-
-const bucketName = "toybox"
+const bucketName = "assets"
 
 func s3Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// 最大10MBのファイルを受け付ける
-	err := r.ParseMultipartForm(10 << 20)
-	if err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -57,14 +45,10 @@ func s3Handler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// ファイル名を生成（タイムスタンプ + 元のファイル名）
-	ext := filepath.Ext(header.Filename)
-	key := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
-
 	// S3にアップロード
 	_, err = Client.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket:      aws.String(bucketName),
-		Key:         aws.String(key),
+		Key:         aws.String(header.Filename),
 		Body:        file,
 		ContentType: aws.String(header.Header.Get("Content-Type")),
 	})
@@ -77,7 +61,7 @@ func s3Handler(w http.ResponseWriter, r *http.Request) {
 	// 署名付きURLを生成（有効期限: 15分）
 	presignedReq, err := PresignClient.PresignGetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
+		Key:    aws.String(header.Filename),
 	}, s3.WithPresignExpires(15*time.Minute))
 	if err != nil {
 		log.Printf("Failed to generate presigned URL: %v", err)
@@ -85,6 +69,5 @@ func s3Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Uploaded file: %s to bucket: %s\n", key, bucketName)
 	fmt.Fprintf(w, "Uploaded: %s", presignedReq.URL)
 }
