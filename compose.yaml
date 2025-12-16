@@ -44,8 +44,6 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - ./aws-init.sh:/etc/localstack/init/ready.d/aws-init.sh
 
-volumes:
-  dbdata:
 networks:
   app-network:
     name: app-network
