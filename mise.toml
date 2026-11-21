@@ -1,0 +1,5 @@
+[tools]
+go = "1.27.2"
+
+[tasks]
+build = "go build -o build/simples3uploader"
