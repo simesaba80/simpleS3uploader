@@ -38,6 +38,35 @@ func getFileMetadata(file *os.File) (contentType string, extension string, err e
 	return contentType, extension, nil
 }
 
+func uploadFile(ctx context.Context, client *s3.Client, fileName string) error {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	contentType, extension, err := getFileMetadata(file)
+	if err != nil {
+		return err
+	}
+	// fmt.Printf("%s: Content-Type: %s, extension: %s\n", fileName, contentType, extension)
+
+	key := os.Getenv("S3_DIR") + "/" + uuid.New().String() + "/origin" + extension
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(os.Getenv("S3_BUCKET_NAME")),
+		Key:         aws.String(key),
+		Body:        file,
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to upload: %w", err)
+	}
+
+	uploadedURL := os.Getenv("S3_BASE_URL") + "/" + os.Getenv("S3_BUCKET_NAME") + "/" + key
+	fmt.Printf("Uploaded %s as %s\n", fileName, uploadedURL)
+	return nil
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -46,24 +75,10 @@ func main() {
 	}
 
 	ctx := context.Background()
-	if len(os.Args) != 2 || os.Args[1] == "" {
-		fmt.Println("Usage: simples3uploader <filename>")
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: simples3uploader <filename> [filename ...]")
 		return
 	}
-	fileName := os.Args[1]
-	file, err := os.Open(fileName)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer file.Close()
-
-	contentType, extension, err := getFileMetadata(file)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("Content-Type: %s, extension: %s\n", contentType, extension)
 
 	creds := credentials.NewStaticCredentialsProvider(os.Getenv("S3_ACCESS_KEY"), os.Getenv("S3_SECRET_ACCESS_KEY"), "")
 	sdkConfig, err := config.LoadDefaultConfig(ctx,
@@ -80,18 +95,9 @@ func main() {
 		o.UsePathStyle = true
 	})
 
-	key := os.Getenv("S3_DIR") + "/" + uuid.New().String() + "/origin" + extension
-	fmt.Println("key:", key)
-	_, err = Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(os.Getenv("S3_BUCKET_NAME")),
-		Key:         aws.String(key),
-		Body:        file,
-		ContentType: aws.String(contentType),
-	})
-	if err != nil {
-		fmt.Printf("Failed to upload %s: %v\n", fileName, err)
-		return
+	for _, fileName := range os.Args[1:] {
+		if err := uploadFile(ctx, Client, fileName); err != nil {
+			fmt.Printf("Failed to upload %s: %v\n", fileName, err)
+		}
 	}
-	uploadedURL := os.Getenv("S3_BASE_URL") + "/" + os.Getenv("S3_BUCKET_NAME") + "/" + key
-	fmt.Printf("Uploaded %s as %s\n", fileName, uploadedURL)
 }
